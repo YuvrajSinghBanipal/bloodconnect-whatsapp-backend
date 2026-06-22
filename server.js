@@ -6,12 +6,48 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const VERIFY_TOKEN = "bloodconnect_verify_token";
 
 app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
   res.send("BloodConnect WhatsApp backend is running 🚀");
+});
+
+// WEBHOOK VERIFY
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("Webhook verified ✅");
+    return res.status(200).send(challenge);
+  }
+
+  return res.sendStatus(403);
+});
+
+// WEBHOOK RECEIVE
+app.post("/webhook", (req, res) => {
+  console.log("Webhook event received:");
+  console.log(JSON.stringify(req.body, null, 2));
+
+  const value = req.body?.entry?.[0]?.changes?.[0]?.value;
+  const message = value?.messages?.[0];
+
+  if (message?.type === "button") {
+    const buttonId = message.button.payload;
+    const from = message.from;
+
+    console.log("Donor number:", from);
+    console.log("Button selected:", buttonId);
+
+    // Later we will update Firebase here
+  }
+
+  res.sendStatus(200);
 });
 
 app.post("/send-whatsapp", async (req, res) => {
@@ -29,31 +65,19 @@ app.post("/send-whatsapp", async (req, res) => {
     } = req.body;
 
     if (!process.env.WHATSAPP_TOKEN) {
-      return res.status(500).json({
-        success: false,
-        message: "WHATSAPP_TOKEN is missing in .env"
-      });
+      return res.status(500).json({ success: false, message: "WHATSAPP_TOKEN is missing in .env" });
     }
 
     if (!process.env.WHATSAPP_PHONE_NUMBER_ID) {
-      return res.status(500).json({
-        success: false,
-        message: "WHATSAPP_PHONE_NUMBER_ID is missing in .env"
-      });
+      return res.status(500).json({ success: false, message: "WHATSAPP_PHONE_NUMBER_ID is missing in .env" });
     }
 
     if (!requestId) {
-      return res.status(400).json({
-        success: false,
-        message: "requestId is required."
-      });
+      return res.status(400).json({ success: false, message: "requestId is required." });
     }
 
     if (!donorPhone) {
-      return res.status(400).json({
-        success: false,
-        message: "Donor phone is required."
-      });
+      return res.status(400).json({ success: false, message: "Donor phone is required." });
     }
 
     const formattedPhone = String(donorPhone).replace(/\D/g, "");
@@ -73,9 +97,7 @@ app.post("/send-whatsapp", async (req, res) => {
       type: "interactive",
       interactive: {
         type: "button",
-        body: {
-          text: messageText
-        },
+        body: { text: messageText },
         action: {
           buttons: [
             {
@@ -97,9 +119,6 @@ app.post("/send-whatsapp", async (req, res) => {
       }
     };
 
-    console.log("📤 Sending payload to Meta:");
-    console.log(JSON.stringify(payload, null, 2));
-
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -111,9 +130,8 @@ app.post("/send-whatsapp", async (req, res) => {
 
     const data = await response.json();
 
-    console.log("📥 Meta status:", response.status);
-    console.log("📥 Meta response:");
-    console.log(JSON.stringify(data, null, 2));
+    console.log("Meta status:", response.status);
+    console.log("Meta response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return res.status(500).json({
@@ -130,7 +148,7 @@ app.post("/send-whatsapp", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Send WhatsApp server error:", error);
+    console.error("Send WhatsApp server error:", error);
 
     return res.status(500).json({
       success: false,
