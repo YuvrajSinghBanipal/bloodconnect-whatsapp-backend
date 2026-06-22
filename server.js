@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { db } from "./firebase-admin.js";
 
 dotenv.config();
 
@@ -15,45 +16,54 @@ app.get("/", (req, res) => {
   res.send("BloodConnect WhatsApp backend is running 🚀");
 });
 
-// WEBHOOK VERIFY
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Webhook verified ✅");
     return res.status(200).send(challenge);
   }
 
   return res.sendStatus(403);
 });
 
-// WEBHOOK RECEIVE
-app.post("/webhook", (req, res) => {
-  console.log("Webhook event received:");
-  console.log(JSON.stringify(req.body, null, 2));
+app.post("/webhook", async (req, res) => {
+  try {
+    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
+    const message = value?.messages?.[0];
 
-  const value = req.body?.entry?.[0]?.changes?.[0]?.value;
-  const message = value?.messages?.[0];
+    if (message?.type === "button") {
+      const buttonId = message.button.payload;
+      const donorPhone = message.from;
 
-  if (message?.type === "button") {
-    const buttonId = message.button.payload;
-    const from = message.from;
+      const [answer, ...requestParts] = buttonId.split("_");
+      const requestId = requestParts.join("_");
 
-    console.log("Donor number:", from);
-    console.log("Button selected:", buttonId);
+      let donorResponse = "unknown";
 
-    // Later we will update Firebase here
+      if (answer === "YES") donorResponse = "confirmed";
+      if (answer === "NO") donorResponse = "declined";
+
+      await db.collection("whatsappRequests").doc(requestId).update({
+        donorResponse,
+        status: "responded",
+        responsePhone: donorPhone,
+        responseButtonId: buttonId,
+        respondedAt: new Date()
+      });
+
+      console.log("Updated WhatsApp request:", requestId, donorResponse);
+    }
+
+    return res.sendStatus(200);
+  } catch (error) {
+    console.error("Webhook error:", error);
+    return res.sendStatus(200);
   }
-
-  res.sendStatus(200);
 });
 
 app.post("/send-whatsapp", async (req, res) => {
-  console.log("✅ /send-whatsapp request received:");
-  console.log(req.body);
-
   try {
     const {
       requestId,
@@ -64,30 +74,14 @@ app.post("/send-whatsapp", async (req, res) => {
       city
     } = req.body;
 
-    if (!process.env.WHATSAPP_TOKEN) {
-      return res.status(500).json({ success: false, message: "WHATSAPP_TOKEN is missing in .env" });
-    }
-
-    if (!process.env.WHATSAPP_PHONE_NUMBER_ID) {
-      return res.status(500).json({ success: false, message: "WHATSAPP_PHONE_NUMBER_ID is missing in .env" });
-    }
-
-    if (!requestId) {
-      return res.status(400).json({ success: false, message: "requestId is required." });
-    }
-
-    if (!donorPhone) {
-      return res.status(400).json({ success: false, message: "Donor phone is required." });
-    }
-
     const formattedPhone = String(donorPhone).replace(/\D/g, "");
 
     const messageText =
       `Hello ${donorName || "Donor"},\n\n` +
       `This is BloodConnect on behalf of ${hospitalName || "the hospital"}${city ? `, ${city}` : ""}.\n\n` +
-      `A patient currently requires ${bloodGroup || "blood"}, and our records show that you may be a suitable donor.\n\n` +
+      `A patient currently requires ${bloodGroup || "blood"}.\n\n` +
       `Please select one option below so the hospital team can confirm your availability.\n\n` +
-      `Thank you for being a lifesaver.\n- BloodConnect`;
+      `- BloodConnect`;
 
     const url = `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
@@ -130,10 +124,8 @@ app.post("/send-whatsapp", async (req, res) => {
 
     const data = await response.json();
 
-    console.log("Meta status:", response.status);
-    console.log("Meta response:", JSON.stringify(data, null, 2));
-
     if (!response.ok) {
+      console.log("Meta error:", JSON.stringify(data, null, 2));
       return res.status(500).json({
         success: false,
         message: "WhatsApp API error",
@@ -148,8 +140,7 @@ app.post("/send-whatsapp", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Send WhatsApp server error:", error);
-
+    console.error("Send WhatsApp error:", error);
     return res.status(500).json({
       success: false,
       message: "Server error while sending WhatsApp message.",
