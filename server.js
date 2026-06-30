@@ -8,6 +8,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const VERIFY_TOKEN = "bloodconnect_verify_token";
+const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v25.0";
 
 app.use(cors());
 app.use(express.json());
@@ -22,50 +23,17 @@ app.get("/webhook", (req, res) => {
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("Webhook verified ✅");
     return res.status(200).send(challenge);
   }
 
   return res.sendStatus(403);
 });
 
-app.get("/register-phone", async (req, res) => {
-  try {
-
-    const response = await fetch(
-      `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/register`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          pin: process.env.WHATSAPP_REGISTER_PIN
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    console.log(data);
-
-    res.status(response.status).json(data);
-
-  } catch (err) {
-
-    console.error(err);
-
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
-
-  }
-});
-
 app.post("/webhook", async (req, res) => {
   try {
+    console.log("Webhook received:", JSON.stringify(req.body, null, 2));
+
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
 
@@ -77,7 +45,6 @@ app.post("/webhook", async (req, res) => {
       const requestId = requestParts.join("_");
 
       let donorResponse = "unknown";
-
       if (answer === "YES") donorResponse = "confirmed";
       if (answer === "NO") donorResponse = "declined";
 
@@ -101,53 +68,49 @@ app.post("/webhook", async (req, res) => {
 
 app.post("/send-whatsapp", async (req, res) => {
   try {
-    const {
-      requestId,
-      donorName,
-      donorPhone,
-      bloodGroup,
-      hospitalName,
-      city
-    } = req.body;
+    console.log("✅ /send-whatsapp called");
+    console.log("Request body:", req.body);
+
+    const { donorPhone } = req.body;
+
+    if (!process.env.WHATSAPP_TOKEN) {
+      return res.status(500).json({
+        success: false,
+        message: "WHATSAPP_TOKEN missing in Render."
+      });
+    }
+
+    if (!process.env.WHATSAPP_PHONE_NUMBER_ID) {
+      return res.status(500).json({
+        success: false,
+        message: "WHATSAPP_PHONE_NUMBER_ID missing in Render."
+      });
+    }
+
+    if (!donorPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "donorPhone is required."
+      });
+    }
 
     const formattedPhone = String(donorPhone).replace(/\D/g, "");
 
-    const messageText =
-      `Hello ${donorName || "Donor"},\n\n` +
-      `This is BloodConnect on behalf of ${hospitalName || "the hospital"}${city ? `, ${city}` : ""}.\n\n` +
-      `A patient currently requires ${bloodGroup || "blood"}.\n\n` +
-      `Please select one option below so the hospital team can confirm your availability.\n\n` +
-      `- BloodConnect`;
-
-    const url = `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    const url = `https://graph.facebook.com/${GRAPH_VERSION}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
     const payload = {
       messaging_product: "whatsapp",
       to: formattedPhone,
-      type: "interactive",
-      interactive: {
-        type: "button",
-        body: { text: messageText },
-        action: {
-          buttons: [
-            {
-              type: "reply",
-              reply: {
-                id: `YES_${requestId}`,
-                title: "Yes, I can"
-              }
-            },
-            {
-              type: "reply",
-              reply: {
-                id: `NO_${requestId}`,
-                title: "No, I can't"
-              }
-            }
-          ]
+      type: "template",
+      template: {
+        name: "hello_world",
+        language: {
+          code: "en_US"
         }
       }
     };
+
+    console.log("Sending template payload:", JSON.stringify(payload, null, 2));
 
     const response = await fetch(url, {
       method: "POST",
@@ -160,8 +123,10 @@ app.post("/send-whatsapp", async (req, res) => {
 
     const data = await response.json();
 
+    console.log("Send WhatsApp status:", response.status);
+    console.log("Send WhatsApp response:", JSON.stringify(data, null, 2));
+
     if (!response.ok) {
-      console.log("Meta error:", JSON.stringify(data, null, 2));
       return res.status(500).json({
         success: false,
         message: "WhatsApp API error",
@@ -171,12 +136,13 @@ app.post("/send-whatsapp", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "WhatsApp message sent successfully.",
+      message: "WhatsApp hello_world template sent successfully.",
       data
     });
 
   } catch (error) {
     console.error("Send WhatsApp error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Server error while sending WhatsApp message.",
