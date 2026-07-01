@@ -98,17 +98,32 @@ app.post("/send-whatsapp", async (req, res) => {
 
     const url = `https://graph.facebook.com/${GRAPH_VERSION}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-    const payload = {
-      messaging_product: "whatsapp",
-      to: formattedPhone,
-      type: "template",
-      template: {
-        name: "hello_world",
-        language: {
-          code: "en_US"
-        }
+   const payload = {
+  messaging_product: "whatsapp",
+  to: formattedPhone,
+  type: "template",
+  template: {
+    name: "test1",
+    language: {
+      code: "en"
+    },
+    components: [
+      {
+        type: "body",
+        parameters: [
+          {
+            type: "text",
+            text: donorName || "sir"
+          },
+          {
+            type: "text",
+            text: bloodGroup || "B+"
+          }
+        ]
       }
-    };
+    ]
+  }
+};
 
     console.log("Sending template payload:", JSON.stringify(payload, null, 2));
 
