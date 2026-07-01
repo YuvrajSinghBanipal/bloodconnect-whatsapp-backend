@@ -71,7 +71,11 @@ app.post("/send-whatsapp", async (req, res) => {
     console.log("✅ /send-whatsapp called");
     console.log("Request body:", req.body);
 
-    const { donorPhone } = req.body;
+   const {
+  donorPhone,
+  donorName,
+  bloodGroup
+} = req.body;
 
     if (!process.env.WHATSAPP_TOKEN) {
       return res.status(500).json({
