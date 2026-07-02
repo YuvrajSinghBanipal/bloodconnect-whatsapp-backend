@@ -71,10 +71,12 @@ app.post("/send-whatsapp", async (req, res) => {
     console.log("✅ /send-whatsapp called");
     console.log("Request body:", req.body);
 
-   const {
+  const {
   donorPhone,
   donorName,
-  bloodGroup
+  bloodGroup,
+  hospitalName,
+  city
 } = req.body;
 
     if (!process.env.WHATSAPP_TOKEN) {
@@ -102,14 +104,14 @@ app.post("/send-whatsapp", async (req, res) => {
 
     const url = `https://graph.facebook.com/${GRAPH_VERSION}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-   const payload = {
+const payload = {
   messaging_product: "whatsapp",
   to: formattedPhone,
   type: "template",
   template: {
-    name: "test1",
+    name: "blood_request_confirm",
     language: {
-      code: "en"
+      code: "en_US"
     },
     components: [
       {
@@ -117,11 +119,19 @@ app.post("/send-whatsapp", async (req, res) => {
         parameters: [
           {
             type: "text",
-            text: donorName || "sir"
+            text: donorName || "Donor"
           },
           {
             type: "text",
-            text: bloodGroup || "B+"
+            text: bloodGroup || "Blood"
+          },
+          {
+            type: "text",
+            text: hospitalName || "Hospital"
+          },
+          {
+            type: "text",
+            text: city || "City"
           }
         ]
       }
