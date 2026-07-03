@@ -37,16 +37,30 @@ app.post("/webhook", async (req, res) => {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
 
-    if (message?.type === "button") {
-      const buttonId = message.button.payload;
+    if (!message) return res.sendStatus(200);
+
+    let buttonId = "";
+
+    if (message.type === "button") {
+      buttonId = message.button?.payload || message.button?.text || "";
+    }
+
+    if (message.type === "interactive") {
+      buttonId =
+        message.interactive?.button_reply?.id ||
+        message.interactive?.button_reply?.title ||
+        "";
+    }
+
+    if (buttonId) {
       const donorPhone = message.from;
 
       const [answer, ...requestParts] = buttonId.split("_");
       const requestId = requestParts.join("_");
 
       let donorResponse = "unknown";
-      if (answer === "YES") donorResponse = "confirmed";
-      if (answer === "NO") donorResponse = "declined";
+      if (answer.toUpperCase() === "YES") donorResponse = "confirmed";
+      if (answer.toUpperCase() === "NO") donorResponse = "declined";
 
       await db.collection("whatsappRequests").doc(requestId).update({
         donorResponse,
@@ -117,21 +131,31 @@ const payload = {
       {
         type: "body",
         parameters: [
+          { type: "text", text: donorName || "Donor" },
+          { type: "text", text: bloodGroup || "Blood" },
+          { type: "text", text: hospitalName || "Hospital" },
+          { type: "text", text: city || "City" }
+        ]
+      },
+      {
+        type: "button",
+        sub_type: "quick_reply",
+        index: "0",
+        parameters: [
           {
-            type: "text",
-            text: donorName || "Donor"
-          },
+            type: "payload",
+            payload: `YES_${requestId}`
+          }
+        ]
+      },
+      {
+        type: "button",
+        sub_type: "quick_reply",
+        index: "1",
+        parameters: [
           {
-            type: "text",
-            text: bloodGroup || "Blood"
-          },
-          {
-            type: "text",
-            text: hospitalName || "Hospital"
-          },
-          {
-            type: "text",
-            text: city || "City"
+            type: "payload",
+            payload: `NO_${requestId}`
           }
         ]
       }
