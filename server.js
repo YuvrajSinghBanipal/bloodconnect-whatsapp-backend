@@ -32,92 +32,13 @@ app.get("/webhook", (req, res) => {
 
 app.post("/webhook", async (req, res) => {
   try {
-    console.log("Webhook received:", JSON.stringify(req.body, null, 2));
-
-    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
-
-    if (value?.statuses) {
-      console.log("Message status event:", JSON.stringify(value.statuses, null, 2));
-      return res.sendStatus(200);
-    }
-
-    const message = value?.messages?.[0];
-    if (!message) return res.sendStatus(200);
-
-    const donorPhone = message.from;
-    let buttonId = "";
-    let buttonText = "";
-
-    if (message.type === "button") {
-      buttonId = message.button?.payload || "";
-      buttonText = message.button?.text || "";
-    }
-
-    if (message.type === "interactive") {
-      buttonId = message.interactive?.button_reply?.id || "";
-      buttonText = message.interactive?.button_reply?.title || "";
-    }
-
-    const rawReply = (buttonId || buttonText || "").trim();
-    console.log("Button reply detected:", rawReply);
-
-    if (!rawReply) return res.sendStatus(200);
-
-    let answer = "";
-    let requestId = "";
-
-    if (rawReply.includes("_")) {
-      const parts = rawReply.split("_");
-      answer = parts[0].toUpperCase();
-      requestId = parts.slice(1).join("_");
-    } else {
-      const lower = rawReply.toLowerCase();
-      if (lower === "yes") answer = "YES";
-      if (lower === "no") answer = "NO";
-    }
-
-    let donorResponse = "unknown";
-    if (answer === "YES") donorResponse = "confirmed";
-    if (answer === "NO") donorResponse = "declined";
-
-    if (!requestId) {
-      console.log("No requestId in button. Searching latest pending request for:", donorPhone);
-
-      const snap = await db
-        .collection("whatsappRequests")
-        .where("donorPhone", "==", donorPhone)
-        .where("status", "==", "pending")
-        .get();
-
-      if (snap.empty) {
-        console.log("No pending request found for:", donorPhone);
-        return res.sendStatus(200);
-      }
-
-      let latestDoc = snap.docs[0];
-
-      snap.docs.forEach((d) => {
-        const a = d.data().createdAt?.toMillis?.() || 0;
-        const b = latestDoc.data().createdAt?.toMillis?.() || 0;
-        if (a > b) latestDoc = d;
-      });
-
-      requestId = latestDoc.id;
-    }
-
-    await db.collection("whatsappRequests").doc(requestId).update({
-      donorResponse,
-      status: "responded",
-      responsePhone: donorPhone,
-      responseButtonId: rawReply,
-      respondedAt: new Date()
-    });
-
-    console.log("Updated WhatsApp request:", requestId, donorResponse);
+    console.log("🔥 REAL WEBHOOK RECEIVED START");
+    console.log(JSON.stringify(req.body, null, 2));
+    console.log("🔥 REAL WEBHOOK RECEIVED END");
 
     return res.sendStatus(200);
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error("Webhook debug error:", error);
     return res.sendStatus(200);
   }
 });
@@ -127,8 +48,8 @@ app.post("/send-whatsapp", async (req, res) => {
     console.log("✅ /send-whatsapp called");
     console.log("Request body:", req.body);
 
-  const {
-     requestId,
+    const {
+      
   donorPhone,
   donorName,
   bloodGroup,
@@ -161,7 +82,7 @@ app.post("/send-whatsapp", async (req, res) => {
 
     const url = `https://graph.facebook.com/${GRAPH_VERSION}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-const payload = {
+   const payload = {
   messaging_product: "whatsapp",
   to: formattedPhone,
   type: "template",
@@ -232,7 +153,7 @@ const payload = {
 
     return res.json({
       success: true,
-      message: "WhatsApp hello_world template sent successfully.",
+      message: "WhatsApp test1 template sent successfully.",
       data
     });
 
