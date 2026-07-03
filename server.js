@@ -32,13 +32,44 @@ app.get("/webhook", (req, res) => {
 
 app.post("/webhook", async (req, res) => {
   try {
-    console.log("🔥 REAL WEBHOOK RECEIVED START");
-    console.log(JSON.stringify(req.body, null, 2));
-    console.log("🔥 REAL WEBHOOK RECEIVED END");
+    console.log("Webhook received:", JSON.stringify(req.body, null, 2));
+
+    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
+
+    if (value?.statuses) {
+      console.log("Status event:", value.statuses[0]?.status);
+      return res.sendStatus(200);
+    }
+
+    const message = value?.messages?.[0];
+    if (!message) return res.sendStatus(200);
+
+    if (message.type === "button") {
+      const buttonPayload = message.button?.payload || "";
+      const donorPhone = message.from;
+
+      const [answer, ...requestParts] = buttonPayload.split("_");
+      const requestId = requestParts.join("_");
+
+      const donorResponse =
+        answer === "YES" ? "confirmed" :
+        answer === "NO" ? "declined" :
+        "unknown";
+
+      await db.collection("whatsappRequests").doc(requestId).update({
+        donorResponse,
+        status: "responded",
+        responsePhone: donorPhone,
+        responseButtonId: buttonPayload,
+        respondedAt: new Date()
+      });
+
+      console.log("Updated WhatsApp request:", requestId, donorResponse);
+    }
 
     return res.sendStatus(200);
   } catch (error) {
-    console.error("Webhook debug error:", error);
+    console.error("Webhook error:", error);
     return res.sendStatus(200);
   }
 });
