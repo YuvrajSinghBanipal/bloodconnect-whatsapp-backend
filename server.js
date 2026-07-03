@@ -167,7 +167,30 @@ const {
     });
   }
 });
+app.get("/subscribe-waba", async (req, res) => {
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${process.env.WHATSAPP_BUSINESS_ACCOUNT_ID}/subscribed_apps`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
+    const data = await response.json();
+
+    console.log("Subscribe WABA status:", response.status);
+    console.log("Subscribe WABA response:", JSON.stringify(data, null, 2));
+
+    return res.status(response.status).json(data);
+  } catch (error) {
+    console.error("Subscribe WABA error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
