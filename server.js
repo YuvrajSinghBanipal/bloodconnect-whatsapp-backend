@@ -334,7 +334,7 @@ app.post("/geocode-address", async (req, res) => {
       });
     }
 
-    const feature = data.features[0];
+ const feature = data.features[0];
 const [longitude, latitude] = feature.geometry.coordinates;
 
 return res.json({
@@ -342,8 +342,12 @@ return res.json({
   latitude,
   longitude,
   coordinates: `${latitude},${longitude}`,
-  label: feature.properties.label,
-  confidence: feature.properties.confidence || null
+  label: feature.properties.label || "",
+  confidence: feature.properties.confidence || 0,
+  country: feature.properties.country || "",
+  region: feature.properties.region || "",
+  locality: feature.properties.locality || feature.properties.county || "",
+  raw: feature.properties
 });
 
   } catch (error) {
