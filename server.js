@@ -301,6 +301,58 @@ app.post("/get-distance", async (req, res) => {
     });
   }
 });
+
+app.post("/geocode-address", async (req, res) => {
+  try {
+    const { address } = req.body;
+
+    if (!process.env.ORS_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: "ORS_API_KEY missing in Render."
+      });
+    }
+
+    if (!address) {
+      return res.status(400).json({
+        success: false,
+        message: "address is required."
+      });
+    }
+
+    const response = await fetch(
+      `https://api.openrouteservice.org/geocode/search?api_key=${process.env.ORS_API_KEY}&text=${encodeURIComponent(address)}&boundary.country=IN`
+    );
+
+    const data = await response.json();
+
+    if (!data.features || data.features.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Could not find coordinates.",
+        data
+      });
+    }
+
+    const [longitude, latitude] = data.features[0].geometry.coordinates;
+
+    return res.json({
+      success: true,
+      latitude,
+      longitude,
+      coordinates: `${latitude},${longitude}`,
+      label: data.features[0].properties.label
+    });
+
+  } catch (error) {
+    console.error("Geocode error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Geocoding failed.",
+      error: error.message
+    });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
