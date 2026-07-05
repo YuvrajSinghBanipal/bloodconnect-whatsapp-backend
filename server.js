@@ -334,15 +334,17 @@ app.post("/geocode-address", async (req, res) => {
       });
     }
 
-    const [longitude, latitude] = data.features[0].geometry.coordinates;
+    const feature = data.features[0];
+const [longitude, latitude] = feature.geometry.coordinates;
 
-    return res.json({
-      success: true,
-      latitude,
-      longitude,
-      coordinates: `${latitude},${longitude}`,
-      label: data.features[0].properties.label
-    });
+return res.json({
+  success: true,
+  latitude,
+  longitude,
+  coordinates: `${latitude},${longitude}`,
+  label: feature.properties.label,
+  confidence: feature.properties.confidence || null
+});
 
   } catch (error) {
     console.error("Geocode error:", error);
@@ -353,6 +355,7 @@ app.post("/geocode-address", async (req, res) => {
     });
   }
 });
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
