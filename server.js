@@ -222,6 +222,85 @@ app.get("/subscribe-waba", async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
+app.post("/get-distance", async (req, res) => {
+  try {
+    const { hospitalAddress, donorAddress } = req.body;
+
+    if (!process.env.ORS_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        message: "ORS_API_KEY missing in Render."
+      });
+    }
+
+    if (!hospitalAddress || !donorAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "hospitalAddress and donorAddress are required."
+      });
+    }
+
+    async function geocode(address) {
+      const response = await fetch(
+        `https://api.openrouteservice.org/geocode/search?api_key=${process.env.ORS_API_KEY}&text=${encodeURIComponent(address)}&boundary.country=IN`
+      );
+
+      const data = await response.json();
+
+      if (!data.features || data.features.length === 0) {
+        throw new Error("Could not geocode: " + address);
+      }
+
+      return data.features[0].geometry.coordinates; // [lng, lat]
+    }
+
+    const hospitalCoords = await geocode(hospitalAddress);
+    const donorCoords = await geocode(donorAddress);
+
+    const routeResponse = await fetch(
+      "https://api.openrouteservice.org/v2/directions/driving-car",
+      {
+        method: "POST",
+        headers: {
+          Authorization: process.env.ORS_API_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          coordinates: [hospitalCoords, donorCoords]
+        })
+      }
+    );
+
+    const routeData = await routeResponse.json();
+
+    if (!routeResponse.ok) {
+      return res.status(500).json({
+        success: false,
+        message: "ORS route error.",
+        error: routeData
+      });
+    }
+
+    const summary = routeData.routes[0].summary;
+
+    return res.json({
+      success: true,
+      distanceKm: (summary.distance / 1000).toFixed(1),
+      durationMin: Math.round(summary.duration / 60),
+      hospitalCoords,
+      donorCoords
+    });
+
+  } catch (error) {
+    console.error("Distance error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Distance calculation failed.",
+      error: error.message
+    });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
