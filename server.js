@@ -225,78 +225,75 @@ app.get("/subscribe-waba", async (req, res) => {
 
 app.post("/get-distance", async (req, res) => {
   try {
-    const { hospitalAddress, donorAddress } = req.body;
+    const {
+      hospitalLatitude,
+      hospitalLongitude,
+      donorLatitude,
+      donorLongitude
+    } = req.body;
 
-    if (!process.env.ORS_API_KEY) {
+    if (!process.env.GOOGLE_MAPS_API_KEY) {
       return res.status(500).json({
         success: false,
-        message: "ORS_API_KEY missing in Render."
+        message: "GOOGLE_MAPS_API_KEY missing in Render."
       });
     }
 
-    if (!hospitalAddress || !donorAddress) {
+    if (
+      hospitalLatitude == null ||
+      hospitalLongitude == null ||
+      donorLatitude == null ||
+      donorLongitude == null
+    ) {
       return res.status(400).json({
         success: false,
-        message: "hospitalAddress and donorAddress are required."
+        message: "Hospital and donor coordinates are required."
       });
     }
 
-    async function geocode(address) {
-      const response = await fetch(
-        `https://api.openrouteservice.org/geocode/search?api_key=${process.env.ORS_API_KEY}&text=${encodeURIComponent(address)}&boundary.country=IN`
-      );
+    const origins = `${hospitalLatitude},${hospitalLongitude}`;
+    const destinations = `${donorLatitude},${donorLongitude}`;
 
-      const data = await response.json();
+    const url =
+      `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origins)}&destinations=${encodeURIComponent(destinations)}&mode=driving&region=in&key=${process.env.GOOGLE_MAPS_API_KEY}`;
 
-      if (!data.features || data.features.length === 0) {
-        throw new Error("Could not geocode: " + address);
-      }
+    const response = await fetch(url);
+    const data = await response.json();
 
-      return data.features[0].geometry.coordinates; // [lng, lat]
-    }
-
-    const hospitalCoords = await geocode(hospitalAddress);
-    const donorCoords = await geocode(donorAddress);
-
-    const routeResponse = await fetch(
-      "https://api.openrouteservice.org/v2/directions/driving-car",
-      {
-        method: "POST",
-        headers: {
-          Authorization: process.env.ORS_API_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          coordinates: [hospitalCoords, donorCoords]
-        })
-      }
-    );
-
-    const routeData = await routeResponse.json();
-
-    if (!routeResponse.ok) {
+    if (data.status !== "OK") {
       return res.status(500).json({
         success: false,
-        message: "ORS route error.",
-        error: routeData
+        message: "Google Distance Matrix API error.",
+        googleStatus: data.status,
+        errorMessage: data.error_message || "",
+        data
       });
     }
 
-    const summary = routeData.routes[0].summary;
+    const element = data.rows?.[0]?.elements?.[0];
+
+    if (!element || element.status !== "OK") {
+      return res.status(404).json({
+        success: false,
+        message: "Could not calculate distance.",
+        elementStatus: element?.status || "NO_ELEMENT",
+        data
+      });
+    }
 
     return res.json({
       success: true,
-      distanceKm: (summary.distance / 1000).toFixed(1),
-      durationMin: Math.round(summary.duration / 60),
-      hospitalCoords,
-      donorCoords
+      distanceText: element.distance.text,
+      durationText: element.duration.text,
+      distanceKm: (element.distance.value / 1000).toFixed(1),
+      durationMin: Math.round(element.duration.value / 60)
     });
 
   } catch (error) {
-    console.error("Distance error:", error);
+    console.error("Google distance error:", error);
     return res.status(500).json({
       success: false,
-      message: "Distance calculation failed.",
+      message: "Google distance calculation failed.",
       error: error.message
     });
   }
@@ -306,10 +303,10 @@ app.post("/geocode-address", async (req, res) => {
   try {
     const { address } = req.body;
 
-    if (!process.env.ORS_API_KEY) {
+    if (!process.env.GOOGLE_MAPS_API_KEY) {
       return res.status(500).json({
         success: false,
-        message: "ORS_API_KEY missing in Render."
+        message: "GOOGLE_MAPS_API_KEY missing in Render."
       });
     }
 
@@ -320,41 +317,40 @@ app.post("/geocode-address", async (req, res) => {
       });
     }
 
-    const response = await fetch(
-      `https://api.openrouteservice.org/geocode/search?api_key=${process.env.ORS_API_KEY}&text=${encodeURIComponent(address)}&boundary.country=IN`
-    );
+    const url =
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&region=in&key=${process.env.GOOGLE_MAPS_API_KEY}`;
 
+    const response = await fetch(url);
     const data = await response.json();
 
-    if (!data.features || data.features.length === 0) {
+    if (data.status !== "OK" || !data.results?.length) {
       return res.status(404).json({
         success: false,
         message: "Could not find coordinates.",
+        googleStatus: data.status,
+        errorMessage: data.error_message || "",
         data
       });
     }
 
- const feature = data.features[0];
-const [longitude, latitude] = feature.geometry.coordinates;
+    const result = data.results[0];
+    const { lat, lng } = result.geometry.location;
 
-return res.json({
-  success: true,
-  latitude,
-  longitude,
-  coordinates: `${latitude},${longitude}`,
-  label: feature.properties.label || "",
-  confidence: feature.properties.confidence || 0,
-  country: feature.properties.country || "",
-  region: feature.properties.region || "",
-  locality: feature.properties.locality || feature.properties.county || "",
-  raw: feature.properties
-});
+    return res.json({
+      success: true,
+      latitude: lat,
+      longitude: lng,
+      coordinates: `${lat},${lng}`,
+      formattedAddress: result.formatted_address,
+      placeId: result.place_id,
+      locationType: result.geometry.location_type
+    });
 
   } catch (error) {
-    console.error("Geocode error:", error);
+    console.error("Google geocode error:", error);
     return res.status(500).json({
       success: false,
-      message: "Geocoding failed.",
+      message: "Google geocoding failed.",
       error: error.message
     });
   }
