@@ -80,12 +80,16 @@ app.post("/send-whatsapp", async (req, res) => {
     console.log("Request body:", req.body);
 
 const {
-  requestId,
-  donorPhone,
-  donorName,
-  bloodGroup,
-  hospitalName,
-  city
+    requestId,
+    donorId,
+    donorName,
+    donorPhone,
+    bloodGroup,
+    hospitalName,
+    city,
+    patientContact,
+    staffId,
+    staffName
 } = req.body;
 
     if (!process.env.WHATSAPP_TOKEN) {
@@ -129,7 +133,8 @@ const {
           { type: "text", text: donorName || "Donor" },
           { type: "text", text: bloodGroup || "Blood" },
           { type: "text", text: hospitalName || "Hospital" },
-          { type: "text", text: city || "City" }
+          { type: "text", text: city || "City" },
+          { type: "text", text: patientContact || "Not Provided" }
         ]
       },
       {
