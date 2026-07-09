@@ -361,6 +361,89 @@ app.post("/geocode-address", async (req, res) => {
   }
 });
 
+app.post("/send-donor-registration", async (req, res) => {
+  try {
+    const {
+      donorId,
+      donorName,
+      donorPhone,
+      bloodGroup,
+      email,
+      address,
+      hospitalName,
+      lastDonation,
+      staffPhone
+    } = req.body;
+
+    const formattedPhone = String(donorPhone).replace(/\D/g, "");
+
+    const payload = {
+      messaging_product: "whatsapp",
+      to: formattedPhone,
+      type: "template",
+      template: {
+        name: "donor_registration_confirmation",
+        language: { code: "en_US" },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: donorName || "Donor" },
+              { type: "text", text: donorName || "Donor" },
+              { type: "text", text: bloodGroup || "Not Provided" },
+              { type: "text", text: donorPhone || "Not Provided" },
+              { type: "text", text: email || "Not Provided" },
+              { type: "text", text: address || "Not Provided" },
+              { type: "text", text: hospitalName || "Not Provided" },
+              { type: "text", text: lastDonation || "First Time Donor" },
+              { type: "text", text: staffPhone || "Not Provided" }
+            ]
+          },
+          {
+            type: "button",
+            sub_type: "quick_reply",
+            index: "0",
+            parameters: [{ type: "payload", payload: `DONORINFO_YES_${donorId}` }]
+          },
+          {
+            type: "button",
+            sub_type: "quick_reply",
+            index: "1",
+            parameters: [{ type: "payload", payload: `DONORINFO_NO_${donorId}` }]
+          }
+        ]
+      }
+    };
+
+    const response = await fetch(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await response.json();
+
+    console.log("Donor registration WhatsApp status:", response.status);
+    console.log("Donor registration WhatsApp response:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      return res.status(500).json({ success: false, error: data });
+    }
+
+    return res.json({ success: true, data });
+
+  } catch (error) {
+    console.error("Donor registration send error:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
