@@ -399,18 +399,6 @@ app.post("/send-donor-registration", async (req, res) => {
               { type: "text", text: staffPhone || "Not Provided" }
             ]
           },
-          {
-            type: "button",
-            sub_type: "quick_reply",
-            index: "0",
-            parameters: [{ type: "payload", payload: `DONORINFO_YES_${donorId}` }]
-          },
-          {
-            type: "button",
-            sub_type: "quick_reply",
-            index: "1",
-            parameters: [{ type: "payload", payload: `DONORINFO_NO_${donorId}` }]
-          }
         ]
       }
     };
