@@ -383,7 +383,7 @@ app.post("/send-donor-registration", async (req, res) => {
       type: "template",
       template: {
         name: "donor_registration_confirmation",
-        language: { code: "en_US" },
+        language: { code: "en" },
         components: [
           {
             type: "body",
